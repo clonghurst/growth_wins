@@ -1,3 +1,5 @@
+# These files contain unit tests and old version of scripts
+/dev/
 # History files
 .Rhistory
 .Rapp.history
