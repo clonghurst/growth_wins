@@ -1,5 +1,59 @@
-# this file analyzes independent data according to the methods described in 
-# Section 2.1 of the main paper
+# Author: Colin A. Longhurst
+# Date: Nov 2025
+# Website:  https://github.com/clonghurst/growth_wins (user guide w/examples)
+
+
+# Hierarchical / Prioritized Estimator for Independent Tumor Data
+#
+# hpc_independent() implements the hierarchical and prioritized estimator
+# described in Section 2 of the main paper for a two-arm study with
+# independent experimental units (one tumor per animal).
+#
+# The function expects a long-format data frame with one row per mouse–day,
+# containing:
+#   - treatment group
+#   - mouse ID
+#   - observation day
+#   - tumor volume
+#   - baseline volume
+#   - death/sacrifice indicator
+#   - day of death/sacrifice
+#
+# For each mouse, the function:
+#   * Determines the terminal follow-up time:
+#       - death day if the mouse dies
+#       - otherwise the study end time (inferred from survivors or provided
+#         via study_end_day).
+#   * Computes the scaled area under the curve (sAUC) for volume / baseline
+#     up to that terminal time.
+#   * Constructs a composite score Q that prioritizes survival over tumor
+#     burden: longer survival wins, and ties in survival time are broken by
+#     lower sAUC.
+#
+# The two treatment arms are then compared via all pairwise differences in Q
+# between treated and control animals. From these comparisons, the function:
+#   * Estimates either:
+#       - the probability of win, kappa = P(X > Y), or
+#       - the win ratio, kappa / (1 - kappa).
+#   * Computes a Wilcoxon–Mann–Whitney p-value on the composite Q
+#     (exact or asymptotic).
+#   * Optionally decomposes wins and losses by decision rule
+#     (death priority, death time, sAUC at equal time) and returns a
+#     detailed pairwise comparison grid (comparison_details = TRUE).
+#   * Provides confidence intervals using either:
+#       - an asymptotic, influence-function-based cluster-robust variance
+#         estimator (treating each mouse as a cluster), or
+#       - a percentile bootstrap that resamples mice within arm.
+#
+# Small-sample corrections (CR1 / CR1s) can be applied to the asymptotic
+# variance, and the study end time can be supplied directly or inferred from
+# the data. The returned object includes the point estimate, p-value,
+# confidence interval, the per-mouse Q table, and (optionally) detailed
+# win/loss summaries and pairwise comparison information.
+
+
+
+
 hpc_independent <- function(df,
                             group_col    = "Group",
                             mouse_col    = "Mouse",
@@ -20,7 +74,7 @@ hpc_independent <- function(df,
                             nBoot         = 2000,
                             seed          = NULL) {
   
-  ## ---- 0) Basic argument validation ----------------------------------------
+  ## Basic argument validation 
   # typed choices
   estimator_type <- match.arg(estimator_type)
   p_val_type     <- match.arg(p_val_type)
@@ -40,7 +94,7 @@ hpc_independent <- function(df,
                  paste(missing_cols, collapse = ", ")))
   }
   
-  # column class sanity checks (lightweight)
+  # column class sanity checks 
   if (!is.numeric(df[[day_col]])) {
     stop(sprintf("Error: `%s` must be numeric (observation day/time).", day_col))
   }
@@ -97,7 +151,7 @@ hpc_independent <- function(df,
                  death_col, paste(bad_death, collapse = ", ")))
   }
   
-  ## ---- 1) Infer study end (T) if not provided ------------------------------
+  ## Infer study end (T) if not provided 
   # T is taken as max day among survivors (fallback to max observed day)
   if (is.null(study_end_day)) {
     T_candidates <- df |>
@@ -111,7 +165,7 @@ hpc_independent <- function(df,
   }
   T_total <- as.numeric(study_end_day)
   
-  ## ---- 2) Per-mouse sAUC and Q (scaled by Baseline) ------------------------
+  ## Per-mouse sAUC and Q (scaled by Baseline) 
   # For each mouse: compute sAUC up to death day or T; then compute composite Q.
   per_mouse <- df |>
     dplyr::as_tibble() |>
@@ -174,7 +228,7 @@ hpc_independent <- function(df,
   
   xQ <- Q_trt$Q; yQ <- Q_ctl$Q
   
-  ## ---- 3) Wilcoxon p-value on Q -------------------------------------------
+  ##  Wilcoxon p-value on Q 
   wt <- suppressWarnings(stats::wilcox.test(
     xQ, yQ,
     exact = (p_val_type == "exact"),
@@ -183,7 +237,7 @@ hpc_independent <- function(df,
   ))
   p_value_wilcox_Q <- wt$p.value
   
-  ## ---- 4) Pairwise S1/S2/TIE from Q and optional rule grid -----------------
+  ## Pairwise S1/S2/TIE from Q and optional rule grid 
   cmp  <- outer(xQ, yQ, `-`)
   S1   <- (cmp > 0) * 1L
   S2   <- (cmp < 0) * 1L
@@ -232,7 +286,7 @@ hpc_independent <- function(df,
     )
   }
   
-  ## ---- 5) Point estimates from Q-comparisons -------------------------------
+  ## Point estimates from Q-comparisons 
   kappa_hat <- sum(S1) / (m * n)
   wr_hat    <- kappa_hat / max(1 - kappa_hat, .Machine$double.eps)
   
@@ -280,7 +334,7 @@ hpc_independent <- function(df,
   
   estimate <- if (estimator_type == "win ratio") wr_hat else kappa_hat
   
-  ## ---- 7) Return -----------------------------------------------------------
+  ## Things to return 
   out <- list(
     estimator_type   = estimator_type,
     estimate         = estimate,

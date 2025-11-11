@@ -1,3 +1,82 @@
+# Author: Colin A. Longhurst
+# Date: Nov 2025
+# Website:  https://github.com/clonghurst/growth_wins (user guide w/examples)
+
+# Hierarchical / Prioritized Estimator for Clustered Tumor Data
+#
+# hpc_clustered() implements the hierarchical and prioritized win-ratio
+# estimator for clustered data (e.g., bilateral tumors within mouse) as
+# described in Section 3 the main paper. It is the clustered analogue of
+# hpc_independent(), allowing multiple tumors per animal and using
+# cluster-robust inference at the mouse level.
+#
+# The function expects a long-format data frame with one row per
+# tumor–day, containing:
+#   - a unique tumor ID
+#   - a cluster/animal ID (mouse)
+#   - treatment group
+#   - observation day
+#   - tumor volume
+#   - baseline volume
+#   - death indicator (1 = death/event, 0 = censored/none)
+#   - last observed day for that tumor
+#
+# For each tumor, the function:
+#   * Identifies its baseline volume and last observed day (death day if
+#     the tumor/animal dies, or last follow-up time otherwise).
+#   * Restricts the longitudinal series to observed times up to the
+#     last observed day (with a small tolerance).
+#   * Computes a cumulative scaled area under the curve (sAUC) for
+#     volume / baseline over time, storing the cumulative sAUC at each
+#     observed day.
+
+# Tumors are then compared between treatment and control arms using a
+# pairwise decision rule that prioritizes survival time and then tumor
+# volume:
+#   * If both tumors die:
+#       - The one with the later death time wins ("death_time").
+#       - If death times are equal, compare sAUC at that time; lower sAUC
+#         wins ("sAUC_equal_time").
+#   * If one dies and the other is censored:
+#       - If the censored tumor is strictly beyond the death
+#         time, it wins on survival ("death_vs_censor_decided").
+#       - Otherwise, compare sAUC at the largest common observed day
+#         ("sAUC_common_maxobs").
+#   * If both are censored:
+#       - If follow-up times are equal, compare sAUC at
+#         that common time ("sAUC_equal_time").
+#       - If follow-up times differ, compare sAUC at the largest common
+#         observed day ("sAUC_common_maxobs").
+#   * Ties or missing sAUC at the comparison time are labeled with
+#     tie/NA-specific rules (e.g. "tie_equal_time", "sAUC_common_maxobs_na").
+#     This should not happen often.
+#
+# From these pairwise comparisons between treated and control tumors, the
+# function:
+#   * Builds matrices of treatment wins (S1), treatment losses (S2), and
+#     ties (TIE).
+#   * Counts total wins/losses/ties and decomposes wins/losses by rule
+#     (death-based vs sAUC-based).
+#   * Maps each tumor to its cluster/animal ID for subsequent
+#     cluster-robust inference.
+#
+# The win ratio and its inference are obtained by calling aux_clustered_wr(),
+# which uses the S1/S2 matrices and the cluster labels to:
+#   * Estimate the win ratio Psi = kappa / (1 - kappa).
+#   * Compute a cluster-robust standard error for log(WR).
+#   * Construct confidence intervals at the requested conf_level.
+#   * Optionally apply small-sample corrections (CR1 / CR1s) based on
+#     the number of clusters and tumors.
+#
+# The returned object includes:
+#   * win_ratio, its standard error, CI, and p-value (from aux_clustered_wr()).
+#   * counts of wins/losses/ties and rule-specific win counts.
+#   * the full pairwise comparison table (which rule decided each pair
+#     and the corresponding score).
+#   * the S1, S2, and TIE matrices and the ordering/cluster labels for
+#     treated and control tumors.
+
+
 hpc_clustered <- function(df,
                           tumor_id_col   = "ID",        # unique tumor id (e.g. "401:R")
                           cluster_id_col = "Mouse",     # animal id for clustering (e.g. "401")
@@ -19,6 +98,15 @@ hpc_clustered <- function(df,
   # df must be data.frame-like
   if (!is.data.frame(df)) {
     stop("Error: `df` must be a data.frame or tibble.")
+  }
+  
+  if (missing(baseline_col)) {
+    warning("Argument `baseline_col` was not specified; using default \"Baseline\". ",
+            "It is recommended to explicitly pass `baseline_col` to avoid mistakes.")
+  }
+  if (missing(last_col)) {
+    warning("Argument `last_col` was not specified; using default \"last_day_obs\". ",
+            "It is recommended to explicitly pass `last_col` to avoid mistakes.")
   }
   
   # required columns present, report which are missing
@@ -77,7 +165,7 @@ hpc_clustered <- function(df,
                  group_col, paste(missing_groups, collapse = ", ")))
   }
   
-  # light sanity around last-day values
+  # some checks around last-day values
   if (any(!is.finite(df[[last_col]]))) {
     stop(sprintf("Error: `%s` contains non-finite values.", last_col))
   }
@@ -85,7 +173,7 @@ hpc_clustered <- function(df,
     stop(sprintf("Error: `%s` contains negative values.", last_col))
   }
   
-  ## ---- 1) Prep data and helpers --------------------------------------------
+  ## rep data and helper funcs
   dn <- function(x) df[[x]]
   
   # Drop rows with missing observation day (cannot be ordered / used)
@@ -94,7 +182,7 @@ hpc_clustered <- function(df,
   # Split into per-tumor longitudinal records
   split_by_tumor <- split(df, dn(tumor_id_col))
   
-  ## ---- 2) Per-tumor cumulative sAUC series (scaled by baseline) ------------
+  ## Per-tumor cumulative sAUC vector (scaled by baseline) 
   # For each tumor: determine baseline, restrict to <= last_day, ensure Day 0, compute cumulative sAUC
   tumor_info <- lapply(split_by_tumor, function(d) {
     d <- d[order(d[[day_col]]), , drop = FALSE]
@@ -149,7 +237,7 @@ hpc_clustered <- function(df,
     )
   })
   
-  ## ---- 3) Determine arm membership -----------------------------------------
+  ## Determine arm membership 
   all_ids <- names(tumor_info)
   t_ids <- all_ids[vapply(tumor_info, function(x) identical(x$group, trt_label), logical(1))]
   c_ids <- all_ids[vapply(tumor_info, function(x) identical(x$group, ctl_label), logical(1))]
@@ -157,7 +245,7 @@ hpc_clustered <- function(df,
     stop("Error: No treated or control tumors found. Check `group_col`, `trt_label`, `ctl_label`.")
   }
   
-  ## ---- 4) Utilities for pairwise decisions ---------------------------------
+  ## Some utilities for pairwise decisions 
   # Largest common observed day up to a target 'upto' (default: min of terminal days)
   max_common_day <- function(tu, cu, upto = min(tu$last, cu$last)) {
     td <- tu$days[tu$days <= upto + tol]
@@ -172,7 +260,7 @@ hpc_clustered <- function(df,
     tu$cum_sauc[[as.character(d_star)]]
   }
   
-  ## ---- 5) Pairwise comparator implementing corrected 𝓦_c -------------------
+  ## Pairwise comparisons implementing the win strategy from the paper
   decide_pair <- function(tu, cu) {
     # Case A: both died -> later death wins; tie on time -> compare sAUC at that time
     if (tu$death == 1L && cu$death == 1L) {
@@ -230,7 +318,9 @@ hpc_clustered <- function(df,
     list(score = 0L, rule = "indeterminate")
   }
   
-  ## ---- 6) Build S1/S2/TIE and the pairwise table ---------------------------
+  # see the test_cases.R 
+  
+  ##  Build S1/S2/TIE and the pairwise table for the aux variance function
   m <- length(t_ids); n <- length(c_ids)
   S1  <- matrix(0L, nrow = m, ncol = n, dimnames = list(t_ids, c_ids))  # treatment wins
   S2  <- matrix(0L, nrow = m, ncol = n, dimnames = list(t_ids, c_ids))  # treatment losses
@@ -263,7 +353,7 @@ hpc_clustered <- function(df,
   }
   pairs <- do.call(rbind, rows)
   
-  ## ---- 7) Requested counts --------------------------------------------------
+  ##  Tally up the decisions
   n_wins   <- sum(S1)
   n_losses <- sum(S2)
   n_ties   <- sum(TIE)
@@ -277,18 +367,18 @@ hpc_clustered <- function(df,
   n_ctl_wins_death <- sum(pairs$score == -1L & pairs$rule %in% death_rules)
   n_ctl_wins_sAUC  <- sum(pairs$score == -1L & is_sauc_rule)
   
-  ## ---- 8) Cluster labels for sandwich variance ------------------------------
+  ## Note Cluster labels for sandwich variance estimator code
   t_clusters <- vapply(t_ids, function(id) tumor_info[[id]]$cluster, character(1))
   c_clusters <- vapply(c_ids, function(id) tumor_info[[id]]$cluster, character(1))
   
-  ## ---- 9) Cluster-robust WR via aux_clustered_wr ----------------------------
+  ## Cluster-robust WR via aux_clustered_wr 
   est <- aux_clustered_wr(S1, S2,
                           t_clusters = t_clusters,
                           c_clusters = c_clusters,
                           conf_level = conf_level,
                           correct    = correct)
   
-  ## ---- 10) Return -----------------------------------------------------------
+  ##  Things to return to the user
   c(est, list(
     counts = list(
       n_wins               = n_wins,
