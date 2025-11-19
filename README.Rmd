@@ -11,7 +11,7 @@ output:
 
 This repository contains R scripts to calculate the hierarchical and prioritized estimators described in:
 
-Longhurst, C, Iyer, G, Yu, M (2025). *Prioritized and Hierarchical Estimators with Applications in Preclinical Tumor Growth Studies*. 
+Longhurst, C, Iyer, G, Yu, M (2025). *A Unified Testing Framework in Preclincial Tumor Growth Studies using Prioritized Endpoints*. 
 
 First, we load some necessary packages and source all the script files:
 
