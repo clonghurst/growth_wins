@@ -2,7 +2,7 @@ Tools for Hierarchical and Prioritized Estimators in Tumor Growth
 Studies
 ================
 Colin Longhurst
-Last Modified: 03 October, 2025
+Last Modified: 19 November, 2025
 
 - [Independent Data](#independent-data)
   - [Function Details](#function-details)
@@ -347,7 +347,7 @@ data.frame(
 
 | Win Ratio | p-value | 95% CI        |
 |----------:|--------:|:--------------|
-|  2.913044 |  0.0026 | (1.533,5.536) |
+|  2.829787 |  0.0033 | (1.485,5.393) |
 
 We can also pull win statistics:
 
@@ -362,7 +362,7 @@ check.names = F
 
 | \# trt wins | \# wins on death | \# wins on sAUC |
 |------------:|-----------------:|----------------:|
-|         268 |               68 |             200 |
+|         266 |               74 |             192 |
 
 as well as the matrix of pairwise comparison results. Reviewing this
 matrix is a good way to ensure the algorithm is processing the data as
@@ -380,7 +380,7 @@ ex1_clust_res$pairs %>%
 | 847:L    | 934 (dead):R | sAUC_common_maxobs      |    -1 |
 | 847:L    | 935:L        | death_vs_censor_decided |    -1 |
 | 847:L    | 935:R        | death_vs_censor_decided |    -1 |
-| 847:L    | 936:L        | sAUC_common_maxobs      |    -1 |
+| 847:L    | 936:L        | death_vs_censor_decided |    -1 |
 | 847:L    | 936:R        | sAUC_equal_time         |    -1 |
 
 The four primary values of the `rule` column correspond to:
@@ -441,7 +441,7 @@ data.frame(
 
 | Win Ratio | p-value | 95% CI        | \# trt wins | \# wins on death | \# wins on sAUC |
 |----------:|--------:|:--------------|------------:|-----------------:|----------------:|
-|  1.265487 |  0.4834 | (0.655,2.445) |         143 |               46 |              97 |
+|  1.115703 |  0.7004 | (0.639,1.949) |         135 |               60 |              75 |
 
 # A Generic Variance Estimator for the Win Ratio
 

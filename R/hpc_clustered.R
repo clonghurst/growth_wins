@@ -279,7 +279,7 @@ hpc_clustered <- function(df,
       dead <- if (tu$death == 1L) tu else cu
       cens <- if (tu$death == 0L) tu else cu
       # Censor strictly after death => censored wins on survival (decided on death vs censor)
-      if (cens$last > dead$last + tol) {
+      if (cens$last > dead$last - tol) { # this was the bug
         if (identical(cens, tu)) return(list(score = +1L, rule = "death_vs_censor_decided"))
         else                     return(list(score = -1L, rule = "death_vs_censor_decided"))
       }
