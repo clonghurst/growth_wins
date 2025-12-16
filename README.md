@@ -2,7 +2,7 @@ Tools for Hierarchical and Prioritized Estimators in Tumor Growth
 Studies
 ================
 Colin Longhurst
-Last Modified: 19 November, 2025
+Last Modified: 03 December, 2025
 
 - [Independent Data](#independent-data)
   - [Function Details](#function-details)
@@ -122,7 +122,7 @@ p-values and a win/loss summary matrix. The arguments are as follows:
   is calculated via the influence function approach described in the
   main paper, if `"percentile"` a percentile bootstrap is returned where
   the re-sampling of clusters (animals) is within treatment arm.
-- `correct` = c(“none”,“CR1”,“CR1s”): Optional samall-sample correction
+- `correct` = c(“none”,“CR1”,“CR1s”): Optional small-sample correction
   for asymptotic CIs/SEs. If `"CR1"`, c = N/N-1, if `"CR1s"`, c =
   (N/N-1)(G-1/G-k), where N is the number of clusters (animals), G is
   the number of tumors (in the independent case, G = N) and k is the
@@ -447,7 +447,7 @@ data.frame(
 
 Many win ratio software packages are limited in their win strategy
 capability, with most being written to accommodate the two time-to-event
-endpoint semi-competing-risks setup Here, we provide a generic function
+endpoint semi-competing-risks setup. Here, we provide a generic function
 to estimate the variance of the win-ratio that can easily be used
 downstream of a custom, user-written win/loss function. Let $m$ be the
 number of (possibly correlated) treatment units (in this case tumors)

@@ -68,7 +68,7 @@ To analyze the data using our proposed estimator, we can use the `hpc_independen
 - `study_end_day = NULL`: Optional fixed study end T; if NULL, inferred from the maximum day among survivors (fallback to max observed day). 
 - `conf_level = 0.95`: Confidence level for intervals (applies to both asymptotic and bootstrap methods).
 - `ci_method` = c("asymptotic","percentile"): If `"asymptotic"` the CI is calculated via the influence function approach described in the main paper, if `"percentile"` a percentile bootstrap is returned where the re-sampling of clusters (animals) is within treatment arm.
-- `correct` = c("none","CR1","CR1s"): Optional samall-sample correction for asymptotic CIs/SEs. If `"CR1"`, c = N/N-1, if `"CR1s"`, c = (N/N-1)(G-1/G-k), where N is the number of clusters (animals), G is the number of tumors (in the independent case, G = N) and k is the number of parameters estimated (k = 2 here). Both use a t-reference distribution with N-1 degrees of freedom.
+- `correct` = c("none","CR1","CR1s"): Optional small-sample correction for asymptotic CIs/SEs. If `"CR1"`, c = N/N-1, if `"CR1s"`, c = (N/N-1)(G-1/G-k), where N is the number of clusters (animals), G is the number of tumors (in the independent case, G = N) and k is the number of parameters estimated (k = 2 here). Both use a t-reference distribution with N-1 degrees of freedom.
 - `nBoot = 2000`: Number of bootstrap replicates when ci_method = "percentile" (ignored otherwise).
 - `seed = NULL`: Optional RNG seed for reproducible bootstrap resamples.
 
@@ -348,7 +348,7 @@ data.frame(
 
 # A Generic Variance Estimator for the Win Ratio
 
-Many win ratio software packages are limited in their win strategy capability, with most being written to accommodate the two time-to-event endpoint semi-competing-risks setup Here, we provide a generic function to estimate the variance of the win-ratio that can easily be used downstream of a custom, user-written win/loss function. Let $m$ be the number of (possibly correlated) treatment units (in this case tumors) and let $n$ be the number of (possibly correlated) control units.
+Many win ratio software packages are limited in their win strategy capability, with most being written to accommodate the two time-to-event endpoint semi-competing-risks setup. Here, we provide a generic function to estimate the variance of the win-ratio that can easily be used downstream of a custom, user-written win/loss function. Let $m$ be the number of (possibly correlated) treatment units (in this case tumors) and let $n$ be the number of (possibly correlated) control units.
 
 The function `aux_clustered_wr()` has six arguments:
 
